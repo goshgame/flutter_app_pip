@@ -1,0 +1,68 @@
+# Operating system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+Thumbs.db
+Desktop.ini
+
+# Editor and IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+.history/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Dart and Flutter generated files
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/doc/api/
+**/coverage/
+**/build/
+**/ios/Flutter/.last_build_id
+
+# Flutter build outputs
+app.*.symbols
+app.*.map.json
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+
+# Android generated files and local configuration
+.gradle/
+.cxx/
+captures/
+local.properties
+GeneratedPluginRegistrant.java
+
+# Android signing credentials
+key.properties
+*.jks
+*.keystore
+
+# Apple platform generated files
+.build/
+.buildlog/
+.swiftpm/
+**/DerivedData/
+**/Pods/
+**/.symlinks/
+**/xcuserdata/
+*.xcuserstate
+**/Flutter/ephemeral/
+**/Flutter/Generated.xcconfig
+**/Flutter/flutter_export_environment.sh
+**/Runner/GeneratedPluginRegistrant.*
