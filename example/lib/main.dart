@@ -17,11 +17,19 @@ void main() {
 }
 
 abstract class LiveVideoSession {
+  bool get isPlaying;
+
+  Stream<bool> get playing;
+
   Future<void> open();
 
   Widget buildVideo({Key? key});
 
   Future<Uint8List?> screenshot();
+
+  Future<void> togglePlayback();
+
+  Future<void> seekBy(Duration offset);
 
   Future<void> dispose();
 }
@@ -37,6 +45,12 @@ class MediaKitLiveVideoSession implements LiveVideoSession {
   final Player player;
   late final VideoController controller;
   var _opened = false;
+
+  @override
+  bool get isPlaying => player.state.playing;
+
+  @override
+  Stream<bool> get playing => player.stream.playing;
 
   @override
   Future<void> open() async {
@@ -60,6 +74,25 @@ class MediaKitLiveVideoSession implements LiveVideoSession {
   @override
   Future<Uint8List?> screenshot() {
     return player.screenshot(format: 'image/jpeg');
+  }
+
+  @override
+  Future<void> togglePlayback() {
+    return isPlaying ? player.pause() : player.play();
+  }
+
+  @override
+  Future<void> seekBy(Duration offset) {
+    final position = player.state.position;
+    final duration = player.state.duration;
+    var target = position + offset;
+    if (target < Duration.zero) {
+      target = Duration.zero;
+    }
+    if (duration > Duration.zero && target > duration) {
+      target = duration;
+    }
+    return player.seek(target);
   }
 
   @override
@@ -91,6 +124,7 @@ class _FlutterAppPipExampleAppState extends State<FlutterAppPipExampleApp> with 
   late final LiveVideoSession _liveSession;
   late final StateMigrationDemoCoordinator _stateMigrationDemo;
   StreamSubscription<FlutterAppSystemPipEvent>? _eventSubscription;
+  StreamSubscription<bool>? _playingSubscription;
   final List<String> _events = <String>[];
   OverlayEntry? _flightEntry;
   Future<void>? _liveSnapshotRefresh;
@@ -113,6 +147,11 @@ class _FlutterAppPipExampleAppState extends State<FlutterAppPipExampleApp> with 
       videoBuilder: (key) => _liveSession.buildVideo(key: key),
     );
     _eventSubscription = _systemPlatform.events.listen(_handleSystemEvent);
+    _playingSubscription = _liveSession.playing.distinct().listen((isPlaying) {
+      if (_controller.isSystemActive.value || _controller.isAutoEnterEnabled.value) {
+        unawaited(_controller.updateSystemPlaybackState(isPlaying));
+      }
+    });
     unawaited(_openLiveSession());
   }
 
@@ -120,6 +159,7 @@ class _FlutterAppPipExampleAppState extends State<FlutterAppPipExampleApp> with 
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _eventSubscription?.cancel();
+    _playingSubscription?.cancel();
     _flightEntry?.remove();
     _liveVideoHostMode.dispose();
     _stateMigrationDemo.dispose();
@@ -467,6 +507,13 @@ class _FlutterAppPipExampleAppState extends State<FlutterAppPipExampleApp> with 
     return FlutterAppSystemPipConfig(
       aspectRatio: const Size(16, 9),
       videoUrl: liveStreamUrl,
+      actions: const <FlutterAppSystemPipAction>{
+        FlutterAppSystemPipAction.seekBackward,
+        FlutterAppSystemPipAction.playPause,
+        FlutterAppSystemPipAction.seekForward,
+      },
+      isPlaying: _liveSession.isPlaying,
+      seekInterval: const Duration(seconds: 10),
       goHome: goHome,
     );
   }
@@ -478,6 +525,7 @@ class _FlutterAppPipExampleAppState extends State<FlutterAppPipExampleApp> with 
     setState(() {
       _events.insert(0, '${DateTime.now().toIso8601String().substring(11, 19)}  ${event.type.name}'
           '${event.active == null ? '' : '=${event.active}'}'
+          '${event.action == null ? '' : '=${event.action!.name}'}'
           '${event.message == null ? '' : '  ${event.message}'}');
       if (_events.length > 6) {
         _events.removeLast();
@@ -496,6 +544,24 @@ class _FlutterAppPipExampleAppState extends State<FlutterAppPipExampleApp> with 
     }
     if (event.type == FlutterAppSystemPipEventType.prepareAutoEnter) {
       _prepareSystemPipVideoLayer();
+    }
+    if (event.type == FlutterAppSystemPipEventType.action) {
+      unawaited(_handleSystemPipAction(event));
+    }
+  }
+
+  Future<void> _handleSystemPipAction(FlutterAppSystemPipEvent event) async {
+    switch (event.action) {
+      case FlutterAppSystemPipAction.seekBackward:
+      case FlutterAppSystemPipAction.seekForward:
+        await _liveSession.seekBy(event.seekOffset ?? Duration.zero);
+        return;
+      case FlutterAppSystemPipAction.playPause:
+        await _liveSession.togglePlayback();
+        await _controller.updateSystemPlaybackState(_liveSession.isPlaying);
+        return;
+      case null:
+        return;
     }
   }
 

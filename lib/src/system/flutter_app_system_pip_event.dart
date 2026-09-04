@@ -1,9 +1,12 @@
+import 'flutter_app_system_pip_action.dart';
+
 enum FlutterAppSystemPipEventType {
   activeChanged,
   startFailed,
   unsupported,
   restoreRequested,
   prepareAutoEnter,
+  action,
 }
 
 class FlutterAppSystemPipEvent {
@@ -11,11 +14,15 @@ class FlutterAppSystemPipEvent {
     required this.type,
     this.active,
     this.message,
+    this.action,
+    this.seekOffset,
   });
 
   final FlutterAppSystemPipEventType type;
   final bool? active;
   final String? message;
+  final FlutterAppSystemPipAction? action;
+  final Duration? seekOffset;
 
   static FlutterAppSystemPipEvent activeChanged(bool active) {
     return FlutterAppSystemPipEvent(
@@ -45,4 +52,15 @@ class FlutterAppSystemPipEvent {
   static const prepareAutoEnter = FlutterAppSystemPipEvent(
     type: FlutterAppSystemPipEventType.prepareAutoEnter,
   );
+
+  static FlutterAppSystemPipEvent actionTriggered(
+    FlutterAppSystemPipAction action, {
+    Duration? seekOffset,
+  }) {
+    return FlutterAppSystemPipEvent(
+      type: FlutterAppSystemPipEventType.action,
+      action: action,
+      seekOffset: seekOffset,
+    );
+  }
 }

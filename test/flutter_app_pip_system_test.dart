@@ -155,6 +155,41 @@ void main() {
 
     expect(events.single.type, FlutterAppSystemPipEventType.prepareAutoEnter);
   });
+
+  testWidgets('method channel platform forwards native playback action', (tester) async {
+    final channel = const MethodChannel(MethodChannelFlutterAppSystemPipPlatform.channelName);
+    final events = <FlutterAppSystemPipEvent>[];
+    final platform = MethodChannelFlutterAppSystemPipPlatform(channel: channel);
+    final subscription = platform.events.listen(events.add);
+    addTearDown(subscription.cancel);
+    addTearDown(platform.dispose);
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      MethodChannelFlutterAppSystemPipPlatform.channelName,
+      channel.codec.encodeMethodCall(
+        const MethodCall('onAction', {
+          'action': 'seekBackward',
+          'seekOffsetMilliseconds': -15000,
+        }),
+      ),
+      (_) {},
+    );
+
+    expect(events.single.type, FlutterAppSystemPipEventType.action);
+    expect(events.single.action, FlutterAppSystemPipAction.seekBackward);
+    expect(events.single.seekOffset, const Duration(seconds: -15));
+  });
+
+  testWidgets('controller updates native playback state', (tester) async {
+    final platform = _FakeSystemPipPlatform(supported: true, startResult: true);
+    final controller = FlutterAppPipController(systemPlatform: platform);
+    addTearDown(controller.dispose);
+
+    final updated = await controller.updateSystemPlaybackState(false);
+
+    expect(updated, true);
+    expect(platform.playbackStates, [false]);
+  });
 }
 
 class _FakeSystemPipPlatform implements FlutterAppSystemPipPlatform {
@@ -165,6 +200,7 @@ class _FakeSystemPipPlatform implements FlutterAppSystemPipPlatform {
   final StreamController<FlutterAppSystemPipEvent> _events =
       StreamController<FlutterAppSystemPipEvent>.broadcast();
   int startCalls = 0;
+  final List<bool> playbackStates = <bool>[];
 
   @override
   Stream<FlutterAppSystemPipEvent> get events => _events.stream;
@@ -193,6 +229,12 @@ class _FakeSystemPipPlatform implements FlutterAppSystemPipPlatform {
 
   @override
   Future<bool> disableAutoEnter() async => true;
+
+  @override
+  Future<bool> updatePlaybackState(bool isPlaying) async {
+    playbackStates.add(isPlaying);
+    return true;
+  }
 
   @override
   Future<bool> stop() async => true;

@@ -92,6 +92,10 @@ public class FlutterAppPipPlugin: NSObject, FlutterPlugin {
             log("auto-enter disabled")
             result(true)
 
+        case "updatePlaybackState":
+            // Custom playback actions are currently implemented by Android PiP only.
+            result(false)
+
         case "stop":
             pipController?.stopPictureInPicture()
             notifyActiveChanged(false)

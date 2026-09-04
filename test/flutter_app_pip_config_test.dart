@@ -35,4 +35,23 @@ void main() {
     expect(config.backgroundColor, const Color(0x00000000));
     expect(config.transitionDuration, const Duration(milliseconds: 200));
   });
+
+  test('system pip config serializes Android playback actions', () {
+    const config = FlutterAppSystemPipConfig(
+      actions: <FlutterAppSystemPipAction>{
+        FlutterAppSystemPipAction.seekBackward,
+        FlutterAppSystemPipAction.playPause,
+        FlutterAppSystemPipAction.seekForward,
+      },
+      isPlaying: false,
+      seekInterval: Duration(seconds: 15),
+    );
+
+    expect(config.toJson(), {
+      'actions': ['seekBackward', 'playPause', 'seekForward'],
+      'isPlaying': false,
+      'seekIntervalMilliseconds': 15000,
+      'goHome': false,
+    });
+  });
 }

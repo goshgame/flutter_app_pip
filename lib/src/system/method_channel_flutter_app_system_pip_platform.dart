@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import 'flutter_app_system_pip_action.dart';
 import 'flutter_app_system_pip_config.dart';
 import 'flutter_app_system_pip_event.dart';
 import 'flutter_app_system_pip_platform.dart';
@@ -53,6 +54,15 @@ class MethodChannelFlutterAppSystemPipPlatform implements FlutterAppSystemPipPla
   }
 
   @override
+  Future<bool> updatePlaybackState(bool isPlaying) async {
+    return await _channel.invokeMethod<bool>(
+          'updatePlaybackState',
+          <String, Object?>{'isPlaying': isPlaying},
+        ) ??
+        false;
+  }
+
+  @override
   Future<bool> stop() async {
     return await _channel.invokeMethod<bool>('stop') ?? false;
   }
@@ -81,8 +91,35 @@ class MethodChannelFlutterAppSystemPipPlatform implements FlutterAppSystemPipPla
         _events.add(FlutterAppSystemPipEvent.restoreRequested);
       case 'onPrepareAutoEnter':
         _events.add(FlutterAppSystemPipEvent.prepareAutoEnter);
+      case 'onAction':
+        final arguments = call.arguments;
+        if (arguments is! Map) {
+          return;
+        }
+        final action = _parseAction(arguments['action']);
+        if (action == null) {
+          return;
+        }
+        final seekOffsetMilliseconds = arguments['seekOffsetMilliseconds'];
+        _events.add(
+          FlutterAppSystemPipEvent.actionTriggered(
+            action,
+            seekOffset: seekOffsetMilliseconds is num
+                ? Duration(milliseconds: seekOffsetMilliseconds.toInt())
+                : null,
+          ),
+        );
       default:
         return;
     }
+  }
+
+  FlutterAppSystemPipAction? _parseAction(Object? value) {
+    for (final action in FlutterAppSystemPipAction.values) {
+      if (action.name == value) {
+        return action;
+      }
+    }
+    return null;
   }
 }

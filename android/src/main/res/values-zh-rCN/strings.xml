@@ -1,0 +1,6 @@
+<resources>
+    <string name="flutter_app_pip_seek_backward">向后快退</string>
+    <string name="flutter_app_pip_play">播放</string>
+    <string name="flutter_app_pip_pause">暂停</string>
+    <string name="flutter_app_pip_seek_forward">向前快进</string>
+</resources>

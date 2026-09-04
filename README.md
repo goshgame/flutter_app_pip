@@ -116,9 +116,40 @@ await pipController.startSystem(
     aspectRatio: Size(9, 16),
     sourceRectHint: Rect.fromLTWH(0, 0, 90, 160),
     videoUrl: 'https://example.com/video.mp4',
+    actions: <FlutterAppSystemPipAction>{
+      FlutterAppSystemPipAction.seekBackward,
+      FlutterAppSystemPipAction.playPause,
+      FlutterAppSystemPipAction.seekForward,
+    },
+    isPlaying: true,
+    seekInterval: Duration(seconds: 10),
   ),
 );
 ```
+
+Android reports PiP action taps through `systemEvents`. Apply them to the
+player owned by the app, then update the native play/pause icon when playback
+state changes:
+
+```dart
+pipController.systemEvents.listen((event) async {
+  switch (event.action) {
+    case FlutterAppSystemPipAction.seekBackward:
+    case FlutterAppSystemPipAction.seekForward:
+      await player.seek(player.state.position + event.seekOffset!);
+      break;
+    case FlutterAppSystemPipAction.playPause:
+      await player.playOrPause();
+      await pipController.updateSystemPlaybackState(player.state.playing);
+      break;
+    case null:
+      break;
+  }
+});
+```
+
+PiP actions are rendered by Android and are available on Android O/API 26+.
+The system may limit the action count or vary their layout across devices.
 
 Auto-enter does not switch to `outOfApp` until native confirms active state:
 

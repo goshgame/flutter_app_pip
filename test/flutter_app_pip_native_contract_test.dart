@@ -23,7 +23,15 @@ void main() {
     expect(source, contains('lastKnownPipActive'));
     expect(source, contains('SCREEN_ORIENTATION_UNSPECIFIED'));
     expect(source, contains('restoreActivityOrientationAfterPip'));
+    expect(source, contains('builder::setActions'));
+    expect(source, contains('RemoteAction'));
+    expect(source, contains('registerActionReceiver'));
+    expect(source, contains('Context.RECEIVER_NOT_EXPORTED'));
+    expect(source, contains('PiP action dispatched to Flutter'));
+    expect(source, contains('onAction'));
+    expect(source, contains('updatePlaybackState'));
     expect(source, isNot(contains('AUTO_ENTER_DELAY_MS')));
+
   });
 
   test('iOS plugin wires system pip channel and AVKit PiP', () {
@@ -41,5 +49,6 @@ void main() {
     expect(source, contains('completeAutoEnter'));
     expect(source, contains('addSublayer'));
     expect(source, contains('onPrepareAutoEnter'));
+    expect(source, contains('case "updatePlaybackState"'));
   });
 }

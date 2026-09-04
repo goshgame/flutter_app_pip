@@ -1,0 +1,6 @@
+<resources>
+    <string name="flutter_app_pip_seek_backward">Seek backward</string>
+    <string name="flutter_app_pip_play">Play</string>
+    <string name="flutter_app_pip_pause">Pause</string>
+    <string name="flutter_app_pip_seek_forward">Seek forward</string>
+</resources>

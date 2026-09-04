@@ -1,5 +1,7 @@
 import 'package:flutter/widgets.dart';
 
+import 'flutter_app_system_pip_action.dart';
+
 class FlutterAppSystemPipConfig {
   const FlutterAppSystemPipConfig({
     this.aspectRatio,
@@ -9,6 +11,9 @@ class FlutterAppSystemPipConfig {
     this.assetName,
     this.sourceContentView,
     this.contentView,
+    this.actions = const <FlutterAppSystemPipAction>{},
+    this.isPlaying = true,
+    this.seekInterval = const Duration(seconds: 10),
     this.autoEnterEnabled = false,
     this.goHome = false,
     this.extra = const <String, Object?>{},
@@ -21,6 +26,9 @@ class FlutterAppSystemPipConfig {
   final String? assetName;
   final int? sourceContentView;
   final int? contentView;
+  final Set<FlutterAppSystemPipAction> actions;
+  final bool isPlaying;
+  final Duration seekInterval;
   final bool autoEnterEnabled;
   final bool goHome;
   final Map<String, Object?> extra;
@@ -33,6 +41,9 @@ class FlutterAppSystemPipConfig {
     String? assetName,
     int? sourceContentView,
     int? contentView,
+    Set<FlutterAppSystemPipAction>? actions,
+    bool? isPlaying,
+    Duration? seekInterval,
     bool? autoEnterEnabled,
     bool? goHome,
     Map<String, Object?>? extra,
@@ -45,6 +56,9 @@ class FlutterAppSystemPipConfig {
       assetName: assetName ?? this.assetName,
       sourceContentView: sourceContentView ?? this.sourceContentView,
       contentView: contentView ?? this.contentView,
+      actions: actions ?? this.actions,
+      isPlaying: isPlaying ?? this.isPlaying,
+      seekInterval: seekInterval ?? this.seekInterval,
       autoEnterEnabled: autoEnterEnabled ?? this.autoEnterEnabled,
       goHome: goHome ?? this.goHome,
       extra: extra ?? this.extra,
@@ -64,6 +78,11 @@ class FlutterAppSystemPipConfig {
       if (assetName?.isNotEmpty == true) 'assetName': assetName,
       if (sourceContentView != null) 'sourceContentView': sourceContentView,
       if (contentView != null) 'contentView': contentView,
+      if (actions.isNotEmpty)
+        'actions': actions.map((action) => action.name).toList(growable: false),
+      if (actions.isNotEmpty) 'isPlaying': isPlaying,
+      if (actions.isNotEmpty)
+        'seekIntervalMilliseconds': seekInterval.inMilliseconds,
       if (autoEnterEnabled) 'autoEnterEnabled': autoEnterEnabled,
       'goHome': goHome,
       ...extra,

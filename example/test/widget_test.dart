@@ -203,12 +203,54 @@ void main() {
     expect(find.byKey(const ValueKey('live-system-pip-surface')), findsOneWidget);
     expect(find.text('fake live video'), findsNWidgets(1));
   });
+
+  testWidgets('native system pip actions control the video session', (tester) async {
+    final session = _FakeLiveVideoSession();
+    await tester.pumpWidget(FlutterAppPipExampleApp(liveSession: session));
+    const channel = MethodChannel(MethodChannelFlutterAppSystemPipPlatform.channelName);
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      MethodChannelFlutterAppSystemPipPlatform.channelName,
+      channel.codec.encodeMethodCall(
+        const MethodCall('onAction', {'action': 'playPause'}),
+      ),
+      (_) {},
+    );
+    await tester.pump();
+
+    expect(session.toggleCalls, 1);
+    expect(session.isPlaying, false);
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      MethodChannelFlutterAppSystemPipPlatform.channelName,
+      channel.codec.encodeMethodCall(
+        const MethodCall('onAction', {
+          'action': 'seekForward',
+          'seekOffsetMilliseconds': 10000,
+        }),
+      ),
+      (_) {},
+    );
+    await tester.pump();
+
+    expect(session.seekOffsets, [const Duration(seconds: 10)]);
+  });
 }
 
 class _FakeLiveVideoSession implements LiveVideoSession {
   _FakeLiveVideoSession({this.screenshotResult});
 
   final Future<Uint8List?>? screenshotResult;
+  final StreamController<bool> _playing = StreamController<bool>.broadcast();
+  bool _isPlaying = true;
+  int toggleCalls = 0;
+  final List<Duration> seekOffsets = <Duration>[];
+
+  @override
+  bool get isPlaying => _isPlaying;
+
+  @override
+  Stream<bool> get playing => _playing.stream;
 
   @override
   Future<void> open() async {}
@@ -228,7 +270,21 @@ class _FakeLiveVideoSession implements LiveVideoSession {
   }
 
   @override
-  Future<void> dispose() async {}
+  Future<void> togglePlayback() async {
+    toggleCalls += 1;
+    _isPlaying = !_isPlaying;
+    _playing.add(_isPlaying);
+  }
+
+  @override
+  Future<void> seekBy(Duration offset) async {
+    seekOffsets.add(offset);
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _playing.close();
+  }
 }
 
 const List<int> _transparentPng = <int>[

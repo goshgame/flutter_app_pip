@@ -298,6 +298,10 @@ class FlutterAppPipController {
     return disabled;
   }
 
+  Future<bool> updateSystemPlaybackState(bool isPlaying) {
+    return _systemPlatform.updatePlaybackState(isPlaying);
+  }
+
   Future<bool> stopSystem() async {
     final stopped = await _systemPlatform.stop();
     if (stopped) {
@@ -394,6 +398,7 @@ class FlutterAppPipController {
       case FlutterAppSystemPipEventType.restoreRequested:
         syncSystemActive(false);
       case FlutterAppSystemPipEventType.prepareAutoEnter:
+      case FlutterAppSystemPipEventType.action:
         break;
     }
     _systemEvents.add(event);
