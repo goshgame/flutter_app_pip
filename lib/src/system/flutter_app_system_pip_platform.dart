@@ -14,6 +14,8 @@ abstract interface class FlutterAppSystemPipPlatform {
 
   Future<bool> completeAutoEnterPreparation();
 
+  Future<bool> completeRenderedFrame();
+
   Future<bool> disableAutoEnter();
 
   Future<bool> updatePlaybackState(bool isPlaying);
@@ -43,6 +45,9 @@ class UnsupportedFlutterAppSystemPipPlatform implements FlutterAppSystemPipPlatf
 
   @override
   Future<bool> completeAutoEnterPreparation() async => false;
+
+  @override
+  Future<bool> completeRenderedFrame() async => false;
 
   @override
   Future<bool> disableAutoEnter() async => false;

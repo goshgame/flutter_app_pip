@@ -49,6 +49,11 @@ class MethodChannelFlutterAppSystemPipPlatform implements FlutterAppSystemPipPla
   }
 
   @override
+  Future<bool> completeRenderedFrame() async {
+    return await _channel.invokeMethod<bool>('completeRenderedFrame') ?? false;
+  }
+
+  @override
   Future<bool> disableAutoEnter() async {
     return await _channel.invokeMethod<bool>('disableAutoEnter') ?? false;
   }

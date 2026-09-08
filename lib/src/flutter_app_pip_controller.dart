@@ -281,6 +281,11 @@ class FlutterAppPipController {
     return _systemPlatform.completeAutoEnterPreparation();
   }
 
+  /// 宿主的小窗布局已完成栅格化，通知 Android 校验 Surface 并撤下转场快照。
+  Future<bool> completeSystemRenderedFrame() {
+    return _systemPlatform.completeRenderedFrame();
+  }
+
   void prepareContentForSystemRestore({
     required FlutterAppPipContentHost host,
     FlutterAppPipOverlayConfig? inAppConfig,

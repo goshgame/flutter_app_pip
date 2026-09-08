@@ -59,6 +59,7 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
     private var currentPipArguments: MutableMap<Any?, Any?>? = null
     private var applicationContext: Context? = null
     private var actionReceiverRegistered = false
+    private var snapshotOverlay: PipSnapshotOverlay? = null
 
     private val actionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -72,9 +73,18 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
         val hostActivity = activity ?: return@UserLeaveHintListener
         if (autoEnterEnabled && !isInPip(hostActivity)) {
             prepareActivityOrientationForPip(hostActivity)
-            // 先通知 Flutter 准备隐藏宿主和恢复快照，旧系统收到完成回执后再进入 PiP。
-            Log.d(TAG, "userLeaveHint request Flutter host preparation")
-            notifyPrepareAutoEnter()
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
+                autoEnterArguments?.get("snapshotOverlayEnabled") == true) {
+                val snapshot = snapshotOverlay ?: PipSnapshotOverlay(hostActivity).also {
+                    snapshotOverlay = it
+                }
+                // 在尺寸改变前发起取帧，但同步进入 PiP，避免异步等待错过 Home 动画。
+                snapshot.capture(buildSourceRect(autoEnterArguments))
+                notifyPrepareAutoEnter()
+                if (!enterPictureInPictureIfEnabled(hostActivity)) snapshot.clear()
+            } else {
+                notifyPrepareAutoEnter()
+            }
         }
     }
 
@@ -104,6 +114,8 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        snapshotOverlay?.clear()
+        snapshotOverlay = null
         channel.setMethodCallHandler(null)
         unregisterActionReceiver()
         applicationContext = null
@@ -156,6 +168,10 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
                 result.success(true)
             }
             "completeAutoEnter" -> {
+                if (hostActivity != null && isInPip(hostActivity)) {
+                    result.success(true)
+                    return
+                }
                 if (hostActivity == null || !autoEnterEnabled) {
                     result.success(false)
                     return
@@ -166,9 +182,14 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
                     result.success(true)
                     return
                 }
+                // 快照分支已在 onUserLeaveHint 同步进入；Dart 回执无需重复进入或截帧。
                 val entered = enterPictureInPictureIfEnabled(hostActivity)
                 Log.i(TAG, "Flutter host prepared; legacy auto-enter result=$entered")
                 result.success(entered)
+            }
+            "completeRenderedFrame" -> {
+                snapshotOverlay?.completeRenderedFrame()
+                result.success(true)
             }
             "disableAutoEnter" -> {
                 disableAutoEnter(hostActivity)
@@ -212,6 +233,8 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
     }
 
     private fun detachActivity() {
+        snapshotOverlay?.clear()
+        snapshotOverlay = null
         activity?.let(::restoreActivityOrientationAfterPip)
         activityPluginBinding?.removeOnUserLeaveHintListener(userLeaveHintListener)
         activityPluginBinding = null
@@ -277,6 +300,9 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
         }
         autoEnterEnabled = false
         autoEnterArguments = null
+        if (lastKnownPipActive != true) {
+            snapshotOverlay?.clear()
+        }
         if (hostActivity == null || !isInPip(hostActivity)) {
             currentPipArguments = null
         }
@@ -332,6 +358,10 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // Android 12+ 只有把参数写回 Activity，关闭播放器后系统才不会继续自动进入 PiP。
             builder.setAutoEnterEnabled(arguments?.get("autoEnterEnabled") == true)
+            // Flutter 默认使用 SurfaceView，关闭无缝缩放后由系统遮蔽窗口 resize 期间的空白帧。
+            builder.setSeamlessResizeEnabled(
+                arguments?.get("seamlessResizeEnabled") as? Boolean ?: true,
+            )
         }
         return builder.build()
     }
@@ -442,6 +472,7 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
 
     private fun notifyActiveChanged(active: Boolean) {
         if (!active) {
+            snapshotOverlay?.clear()
             activity?.let(::restoreActivityOrientationAfterPip)
         }
         if (lastKnownPipActive == active) {
