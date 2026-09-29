@@ -43,7 +43,17 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
 
         @JvmStatic
         fun dispatchPictureInPictureModeChanged(active: Boolean) {
-            activeInstance?.get()?.notifyActiveChanged(active)
+            activeInstance?.get()?.onPictureInPictureModeChanged(active)
+        }
+
+        @JvmStatic
+        fun dispatchPictureInPictureRequested() {
+            activeInstance?.get()?.prepareAutoEnterIfEnabled()
+        }
+
+        @JvmStatic
+        fun dispatchPictureInPictureTransitionStarted() {
+            activeInstance?.get()?.prepareAutoEnterIfEnabled()
         }
 
     }
@@ -53,6 +63,7 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
     private var activityPluginBinding: ActivityPluginBinding? = null
     private var application: Application? = null
     private var autoEnterEnabled = false
+    private var autoEnterPreparationPending = false
     private var autoEnterArguments: Map<*, *>? = null
     private var lastKnownPipActive: Boolean? = null
     private var orientationBeforePip: Int? = null
@@ -88,6 +99,13 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
         }
     }
 
+    private fun prepareAutoEnterIfEnabled() {
+        val hostActivity = activity ?: return
+        if (!autoEnterEnabled || isInPip(hostActivity)) return
+        prepareActivityOrientationForPip(hostActivity)
+        notifyPrepareAutoEnter()
+    }
+
     private val lifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityPaused(pausedActivity: Activity) {
         }
@@ -110,7 +128,6 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
         channel.setMethodCallHandler(this)
         applicationContext = binding.applicationContext
         registerActionReceiver(binding.applicationContext)
-        activeInstance = WeakReference(this)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -219,6 +236,10 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
     }
 
     fun onPictureInPictureModeChanged(active: Boolean) {
+        if (active && autoEnterEnabled && lastKnownPipActive != true) {
+            // Android 12-14 可能跳过离开页面提示，确认入窗时补发一次准备事件。
+            notifyPrepareAutoEnter()
+        }
         notifyActiveChanged(active)
     }
 
@@ -230,9 +251,14 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
         application = newActivity.application
         application?.registerActivityLifecycleCallbacks(lifecycleCallbacks)
         binding.addOnUserLeaveHintListener(userLeaveHintListener)
+        // 后台 FlutterEngine 也会注册插件，只有绑定页面 Activity 的实例能接收 PiP 回调。
+        activeInstance = WeakReference(this)
     }
 
     private fun detachActivity() {
+        if (activeInstance?.get() === this) {
+            activeInstance = null
+        }
         snapshotOverlay?.clear()
         snapshotOverlay = null
         activity?.let(::restoreActivityOrientationAfterPip)
@@ -292,6 +318,9 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
 
     private fun disableAutoEnter(hostActivity: Activity?) {
         val wasEnabled = autoEnterEnabled
+        if (autoEnterPreparationPending && hostActivity != null && !isInPip(hostActivity)) {
+            notifyActiveChanged(false)
+        }
         if (hostActivity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val arguments = autoEnterArguments?.toMutableMap()
                 ?: mutableMapOf<Any?, Any?>()
@@ -471,11 +500,13 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
     }
 
     private fun notifyActiveChanged(active: Boolean) {
+        val wasPreparing = autoEnterPreparationPending
+        autoEnterPreparationPending = false
         if (!active) {
             snapshotOverlay?.clear()
             activity?.let(::restoreActivityOrientationAfterPip)
         }
-        if (lastKnownPipActive == active) {
+        if (lastKnownPipActive == active && !(wasPreparing && !active)) {
             return
         }
         lastKnownPipActive = active
@@ -569,6 +600,8 @@ class FlutterAppPipPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCa
     }
 
     private fun notifyPrepareAutoEnter() {
+        if (autoEnterPreparationPending) return
+        autoEnterPreparationPending = true
         Log.d(TAG, "notify Flutter to prepare system PiP host")
         channel.invokeMethod("onPrepareAutoEnter", null)
     }

@@ -80,6 +80,7 @@ void main() {
     );
 
     final platform = MethodChannelFlutterAppSystemPipPlatform();
+    addTearDown(platform.dispose);
 
     final started = await platform.start(
       const FlutterAppSystemPipConfig(
@@ -121,11 +122,16 @@ void main() {
 
   testWidgets('method channel platform forwards native active callback', (tester) async {
     final channel = const MethodChannel(MethodChannelFlutterAppSystemPipPlatform.channelName);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => true,
+    );
     final events = <FlutterAppSystemPipEvent>[];
     final platform = MethodChannelFlutterAppSystemPipPlatform(channel: channel);
     final subscription = platform.events.listen(events.add);
     addTearDown(subscription.cancel);
     addTearDown(platform.dispose);
+    await platform.enableAutoEnter(const FlutterAppSystemPipConfig());
 
     await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
       MethodChannelFlutterAppSystemPipPlatform.channelName,
@@ -141,11 +147,16 @@ void main() {
 
   testWidgets('method channel platform forwards native prepare auto enter callback', (tester) async {
     final channel = const MethodChannel(MethodChannelFlutterAppSystemPipPlatform.channelName);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => true,
+    );
     final events = <FlutterAppSystemPipEvent>[];
     final platform = MethodChannelFlutterAppSystemPipPlatform(channel: channel);
     final subscription = platform.events.listen(events.add);
     addTearDown(subscription.cancel);
     addTearDown(platform.dispose);
+    await platform.enableAutoEnter(const FlutterAppSystemPipConfig());
 
     await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
       MethodChannelFlutterAppSystemPipPlatform.channelName,
@@ -156,13 +167,114 @@ void main() {
     expect(events.single.type, FlutterAppSystemPipEventType.prepareAutoEnter);
   });
 
+  testWidgets('native callbacks survive disposal of another platform instance', (tester) async {
+    final channel = const MethodChannel(MethodChannelFlutterAppSystemPipPlatform.channelName);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => true,
+    );
+    final first = MethodChannelFlutterAppSystemPipPlatform(channel: channel);
+    final second = MethodChannelFlutterAppSystemPipPlatform(channel: channel);
+    var firstDisposed = false;
+    addTearDown(() {
+      if (!firstDisposed) first.dispose();
+      second.dispose();
+    });
+    final firstEvents = <FlutterAppSystemPipEvent>[];
+    final secondEvents = <FlutterAppSystemPipEvent>[];
+    final firstSubscription = first.events.listen(firstEvents.add);
+    final secondSubscription = second.events.listen(secondEvents.add);
+    addTearDown(firstSubscription.cancel);
+    addTearDown(secondSubscription.cancel);
+
+    Future<void> sendPrepareEvent() async {
+      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+        MethodChannelFlutterAppSystemPipPlatform.channelName,
+        channel.codec.encodeMethodCall(const MethodCall('onPrepareAutoEnter')),
+        (_) {},
+      );
+    }
+
+    await first.enableAutoEnter(const FlutterAppSystemPipConfig());
+    await sendPrepareEvent();
+    expect(firstEvents.length, 1);
+    expect(secondEvents, isEmpty);
+
+    await second.enableAutoEnter(const FlutterAppSystemPipConfig());
+    first.dispose();
+    firstDisposed = true;
+    await sendPrepareEvent();
+    expect(firstEvents.length, 1);
+    expect(secondEvents.length, 1);
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      MethodChannelFlutterAppSystemPipPlatform.channelName,
+      channel.codec.encodeMethodCall(const MethodCall('onActiveChanged', {'active': true})),
+      (_) {},
+    );
+    expect(firstEvents.length, 1);
+    expect(secondEvents.last.type, FlutterAppSystemPipEventType.activeChanged);
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      MethodChannelFlutterAppSystemPipPlatform.channelName,
+      channel.codec.encodeMethodCall(const MethodCall('onActiveChanged', {'active': false})),
+      (_) {},
+    );
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      MethodChannelFlutterAppSystemPipPlatform.channelName,
+      channel.codec.encodeMethodCall(const MethodCall('onRestoreRequested')),
+      (_) {},
+    );
+    expect(secondEvents.last.type, FlutterAppSystemPipEventType.restoreRequested);
+  });
+
+  testWidgets('stale platform cannot disable another platform auto enter', (tester) async {
+    final channel = const MethodChannel(MethodChannelFlutterAppSystemPipPlatform.channelName);
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async {
+        calls.add(call);
+        return true;
+      },
+    );
+    final first = MethodChannelFlutterAppSystemPipPlatform(channel: channel);
+    final second = MethodChannelFlutterAppSystemPipPlatform(channel: channel);
+    addTearDown(first.dispose);
+    addTearDown(second.dispose);
+
+    await first.enableAutoEnter(const FlutterAppSystemPipConfig());
+    await second.enableAutoEnter(const FlutterAppSystemPipConfig());
+    expect(await first.completeAutoEnterPreparation(), false);
+    expect(await first.updatePlaybackState(false), true);
+    expect(await first.stop(), true);
+    expect(await first.disableAutoEnter(), true);
+    expect(calls.where((call) => call.method != 'enableAutoEnter'), isEmpty);
+
+    expect(await second.completeAutoEnterPreparation(), true);
+    expect(await second.updatePlaybackState(true), true);
+    expect(await second.disableAutoEnter(), true);
+    expect(calls.where((call) => call.method == 'disableAutoEnter').length, 1);
+  });
+
   testWidgets('method channel platform forwards native playback action', (tester) async {
     final channel = const MethodChannel(MethodChannelFlutterAppSystemPipPlatform.channelName);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => true,
+    );
     final events = <FlutterAppSystemPipEvent>[];
     final platform = MethodChannelFlutterAppSystemPipPlatform(channel: channel);
     final subscription = platform.events.listen(events.add);
     addTearDown(subscription.cancel);
     addTearDown(platform.dispose);
+    await platform.enableAutoEnter(const FlutterAppSystemPipConfig());
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      MethodChannelFlutterAppSystemPipPlatform.channelName,
+      channel.codec.encodeMethodCall(const MethodCall('onActiveChanged', {'active': true})),
+      (_) {},
+    );
 
     await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
       MethodChannelFlutterAppSystemPipPlatform.channelName,
@@ -175,9 +287,9 @@ void main() {
       (_) {},
     );
 
-    expect(events.single.type, FlutterAppSystemPipEventType.action);
-    expect(events.single.action, FlutterAppSystemPipAction.seekBackward);
-    expect(events.single.seekOffset, const Duration(seconds: -15));
+    expect(events.last.type, FlutterAppSystemPipEventType.action);
+    expect(events.last.action, FlutterAppSystemPipAction.seekBackward);
+    expect(events.last.seekOffset, const Duration(seconds: -15));
   });
 
   testWidgets('controller updates native playback state', (tester) async {
@@ -226,6 +338,9 @@ class _FakeSystemPipPlatform implements FlutterAppSystemPipPlatform {
 
   @override
   Future<bool> completeAutoEnterPreparation() async => true;
+
+  @override
+  Future<bool> completeRenderedFrame() async => true;
 
   @override
   Future<bool> disableAutoEnter() async => true;

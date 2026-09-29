@@ -172,6 +172,8 @@ The host activity must support Picture-in-Picture:
 
 Android PiP requires Android O/API 26+ and `PackageManager.FEATURE_PICTURE_IN_PICTURE`.
 
+Forward PiP callbacks from the host `Activity` (see `example/android/app/src/main/kotlin/com/example/flutter_app_pip_example/MainActivity.kt`). `onPictureInPictureRequested` provides an early preparation signal when the system sends one; Android 15+ also reports the start of the transition. Android 12-14 auto-enter may skip both early signals, so use `activeChanged` as the authoritative entry state.
+
 ## iOS Setup
 
 iOS system PiP uses AVKit and requires renderable native media. Arbitrary Flutter widgets cannot be shown outside the app as system PiP content.

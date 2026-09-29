@@ -170,12 +170,6 @@ class _FlutterAppPipExampleAppState extends State<FlutterAppPipExampleApp> with 
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      if (_liveRouteVisible || _livePipPrepared) {
-        _prepareSystemPipVideoLayer();
-      }
-      return;
-    }
     if (state == AppLifecycleState.resumed && !_controller.isSystemActive.value) {
       _clearSystemPipVideoLayer();
     }
@@ -543,6 +537,10 @@ class _FlutterAppPipExampleAppState extends State<FlutterAppPipExampleApp> with 
       unawaited(_openLiveRoomFromPip());
     }
     if (event.type == FlutterAppSystemPipEventType.prepareAutoEnter) {
+      _prepareSystemPipVideoLayer();
+    }
+    if (event.type == FlutterAppSystemPipEventType.activeChanged && event.active == true) {
+      // Android 12+ 可能直接自动进入 PiP，未先发送用户离开提示。
       _prepareSystemPipVideoLayer();
     }
     if (event.type == FlutterAppSystemPipEventType.action) {
